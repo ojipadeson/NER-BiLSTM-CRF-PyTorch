@@ -7,6 +7,7 @@ import visdom
 import torch
 import pickle
 
+import gc
 from collections import OrderedDict
 from tqdm import tqdm
 from torch.autograd import Variable
@@ -22,6 +23,10 @@ optparser.add_option("-T", "--train", default="data/eng.train", help="Train set 
 optparser.add_option("-d", "--dev", default="data/eng.testa", help="Dev set location")
 optparser.add_option("-t", "--test", default="data/eng.testb", help="Test set location")
 optparser.add_option("--test_train", default="data/eng.train50000", help="test train")
+# optparser.add_option("-T", "--train", default="NER/train.txt", help="Train set location")
+# optparser.add_option("-d", "--dev", default="NER/dev.txt", help="Dev set location")
+# optparser.add_option("-t", "--test", default="NER/test.txt", help="Test set location")
+# optparser.add_option("--test_train", default="NER/train.txt", help="test train")
 optparser.add_option("--score", default="evaluation/temp/score.txt", help="score file location")
 optparser.add_option("-s", "--tag_scheme", default="iobes", help="Tagging scheme (IOB or IOBES)")
 optparser.add_option(
@@ -65,7 +70,7 @@ optparser.add_option(
 optparser.add_option(
     "-p",
     "--pre_emb",
-    default="glove.840B.300d.txt",
+    default="../input/glove300d/glove.840B.300d.txt",
     help="Location of pretrained embeddings",
 )
 optparser.add_option("-A", "--all_emb", default="1", type="int", help="Load all embeddings")
@@ -458,6 +463,9 @@ if __name__ == "__main__":
         pickle.dump(mappings, f)
 
     print("word_to_id: ", len(word_to_id))
+
+    torch.cuda.empty_cache()
+    # torch.cuda.memory_summary(device=None, abbreviated=False)
 
     model = BiLSTM_CRF(
         vocab_size=len(word_to_id),
