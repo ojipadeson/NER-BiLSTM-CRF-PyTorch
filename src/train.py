@@ -65,7 +65,7 @@ optparser.add_option(
 optparser.add_option(
     "-p",
     "--pre_emb",
-    default="data/glove.6B.100d.txt",
+    default="glove.840B.300d.txt",
     help="Location of pretrained embeddings",
 )
 optparser.add_option("-A", "--all_emb", default="1", type="int", help="Load all embeddings")
@@ -258,7 +258,6 @@ def evaluating(model, datas, best_F):
     return best_F, new_F, save
 
 
-
 def train():
     learning_rate = 0.015
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
@@ -271,7 +270,7 @@ def train():
     plot_every = 100
     eval_every = 200
     count = 0
-    vis = visdom.Visdom()
+    # vis = visdom.Visdom(use_incoming_socket=False)
     sys.stdout.flush()
 
     model.train(True)
@@ -333,26 +332,26 @@ def train():
             if count % plot_every == 0:
                 loss /= plot_every
                 print(loss)
-                if losses == []:
+                if not losses:
                     losses.append(loss)
                 losses.append(loss)
                 text = "<p>" + "</p><p>".join([str(l) for l in losses[-9:]]) + "</p>"
                 losswin = "loss_" + name
                 textwin = "loss_text_" + name
-                vis.line(
-                    np.array(losses),
-                    X=np.array([plot_every * i for i in range(len(losses))]),
-                    win=losswin,
-                    opts={
-                        "title": losswin,
-                        "legend": ["loss"]
-                    },
-                )
-                vis.text(text, win=textwin, opts={"title": textwin})
+                # vis.line(
+                #     np.array(losses),
+                #     X=np.array([plot_every * i for i in range(len(losses))]),
+                #     win=losswin,
+                #     opts={
+                #         "title": losswin,
+                #         "legend": ["loss"]
+                #     },
+                # )
+                # vis.text(text, win=textwin, opts={"title": textwin})
                 loss = 0.0
 
-            if (count % (eval_every) == 0 and count > (eval_every * 20) or count % (eval_every * 4) == 0 and count <
-                (eval_every * 20)):
+            if (count % eval_every == 0 and count > (eval_every * 20) or count % (eval_every * 4) == 0 and count <
+                    (eval_every * 20)):
                 model.train(False)
                 best_train_F, new_train_F, _ = evaluating(model, test_train_data, best_train_F)
                 best_dev_F, new_dev_F, save = evaluating(model, dev_data, best_dev_F)
@@ -363,15 +362,15 @@ def train():
 
                 all_F.append([new_train_F, new_dev_F, new_test_F])
                 Fwin = "F-score of {train, dev, test}_" + name
-                vis.line(
-                    np.array(all_F),
-                    win=Fwin,
-                    X=np.array([eval_every * i for i in range(len(all_F))]),
-                    opts={
-                        "title": Fwin,
-                        "legend": ["train", "dev", "test"]
-                    },
-                )
+                # vis.line(
+                #     np.array(all_F),
+                #     win=Fwin,
+                #     X=np.array([eval_every * i for i in range(len(all_F))]),
+                #     opts={
+                #         "title": Fwin,
+                #         "legend": ["train", "dev", "test"]
+                #     },
+                # )
                 model.train(True)
 
             if count % len(train_data) == 0:
