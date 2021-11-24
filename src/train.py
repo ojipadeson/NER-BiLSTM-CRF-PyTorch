@@ -1,22 +1,22 @@
 # coding=utf-8
 import optparse
 import itertools
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import sys
-import visdom
+# import visdom
 import torch
 import pickle
 
-import gc
+# import gc
 from collections import OrderedDict
 from tqdm import tqdm
 from torch.autograd import Variable
-from sklearn.metrics import classification_report, f1_score, confusion_matrix
+# from sklearn.metrics import classification_report, f1_score, confusion_matrix
 
 import loader
 from utils import *
 from loader import *
-from model import BiLSTM_CRF
+# from model import BiLSTM_CRF
 
 optparser = optparse.OptionParser()
 optparser.add_option("-T", "--train", default="data/eng.train", help="Train set location")
@@ -70,7 +70,7 @@ optparser.add_option(
 optparser.add_option(
     "-p",
     "--pre_emb",
-    default="../input/glove300d/glove.840B.300d.txt",
+    default="glove.840B.300d.txt",
     help="Location of pretrained embeddings",
 )
 optparser.add_option("-A", "--all_emb", default="1", type="int", help="Load all embeddings")
@@ -125,61 +125,6 @@ models_path = "models/"
 model_name = models_path + name  # get_name(parameters)
 tmp_model = model_name + ".tmp"
 
-
-# def evaluating_with_sklearn(model, datas, best_F=0):
-#     # FB1 on word level
-#     save = False
-#     new_F = 0.0
-#     gold_tag_id = []
-#     pred_tag_id = []
-#     for data in datas:
-#         gold_tag_id.extend(data["tags"])  # [tad_id]
-#         chars = data["chars"]  # [[char_id]]
-#         caps = data["caps"]  # [cap_feat_id]
-
-#         if parameters["char_mode"] == "LSTM":
-#             chars_sorted = sorted(chars, key=lambda p: len(p), reverse=True)
-#             d = {}
-#             for i, ci in enumerate(chars):
-#                 for j, cj in enumerate(chars_sorted):
-#                     if ci == cj and not j in d and not i in d.values():
-#                         d[j] = i
-#                         continue
-#             chars_length = [len(c) for c in chars_sorted]
-#             char_maxl = max(chars_length)
-#             chars_mask = np.zeros((len(chars_sorted), char_maxl), dtype="int")
-#             for i, c in enumerate(chars_sorted):
-#                 chars_mask[i, :chars_length[i]] = c
-#             chars_mask = Variable(torch.LongTensor(chars_mask))
-
-#         if parameters["char_mode"] == "CNN":
-#             d = {}
-#             chars_length = [len(c) for c in chars]
-#             char_maxl = max(chars_length)
-#             chars_mask = np.zeros((len(chars_length), char_maxl), dtype="int")
-#             for i, c in enumerate(chars):
-#                 chars_mask[i, :chars_length[i]] = c
-#             chars_mask = Variable(torch.LongTensor(chars_mask))
-
-#         dwords = Variable(torch.LongTensor(data["words"]))
-#         dcaps = Variable(torch.LongTensor(caps))
-#         if use_gpu:
-#             val, out = model(dwords.cuda(), chars_mask.cuda(), dcaps.cuda(), chars_length, d)
-#         else:
-#             val, out = model(dwords, chars_mask, dcaps, chars_length, d)
-#         pred_tag_id.extend(out)
-
-#     tag_ids = list(id_to_tag.keys())[:-2]  # ignore <start> and <stop>
-#     tags = list(id_to_tag.values())[:-2]
-#     print(classification_report(gold_tag_id, pred_tag_id, labels=tag_ids[0:], target_names=tags[0:], digits=4))
-#     print(confusion_matrix(gold_tag_id, pred_tag_id, labels=tag_ids))
-#     new_F = f1_score(gold_tag_id, pred_tag_id, average="micro")
-#     print()
-#     if new_F > best_F:
-#         best_F = new_F
-#         save = True
-#         print(f"the best F is {best_F} \n\n")
-#     return best_F, new_F, save
 
 def evaluating(model, datas, best_F):
     # FB1 on pharse level
@@ -266,14 +211,14 @@ def evaluating(model, datas, best_F):
 def train():
     learning_rate = 0.015
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
-    losses = []
+    # losses = []
     loss = 0.0
     best_dev_F = -1.0
     best_test_F = -1.0
     best_train_F = -1.0
     all_F = [[0, 0, 0]]
-    plot_every = 100
-    eval_every = 200
+    # plot_every = 100
+    # eval_every = 200
     count = 0
     # vis = visdom.Visdom(use_incoming_socket=False)
     sys.stdout.flush()
@@ -334,55 +279,29 @@ def train():
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
 
-            if count % plot_every == 0:
-                loss /= plot_every
-                print(loss)
-                if not losses:
-                    losses.append(loss)
-                losses.append(loss)
-                text = "<p>" + "</p><p>".join([str(l) for l in losses[-9:]]) + "</p>"
-                losswin = "loss_" + name
-                textwin = "loss_text_" + name
-                # vis.line(
-                #     np.array(losses),
-                #     X=np.array([plot_every * i for i in range(len(losses))]),
-                #     win=losswin,
-                #     opts={
-                #         "title": losswin,
-                #         "legend": ["loss"]
-                #     },
-                # )
-                # vis.text(text, win=textwin, opts={"title": textwin})
-                loss = 0.0
-
-            if (count % eval_every == 0 and count > (eval_every * 20) or count % (eval_every * 4) == 0 and count <
-                    (eval_every * 20)):
-                model.train(False)
-                best_train_F, new_train_F, _ = evaluating(model, test_train_data, best_train_F)
-                best_dev_F, new_dev_F, save = evaluating(model, dev_data, best_dev_F)
-                if save:
-                    torch.save(model, model_name)
-                best_test_F, new_test_F, _ = evaluating(model, test_data, best_test_F)
-                sys.stdout.flush()
-
-                all_F.append([new_train_F, new_dev_F, new_test_F])
-                Fwin = "F-score of {train, dev, test}_" + name
-                # vis.line(
-                #     np.array(all_F),
-                #     win=Fwin,
-                #     X=np.array([eval_every * i for i in range(len(all_F))]),
-                #     opts={
-                #         "title": Fwin,
-                #         "legend": ["train", "dev", "test"]
-                #     },
-                # )
-                model.train(True)
-
             if count % len(train_data) == 0:
                 adjust_learning_rate(optimizer, lr=learning_rate / (1 + 0.05 * count / len(train_data)))
 
-    plt.plot(losses)
-    plt.show()
+            # if count % plot_every == 0:
+            #     loss /= plot_every
+            #     print(loss)
+            #     if not losses:
+            #         losses.append(loss)
+            #     losses.append(loss)
+            #     loss = 0.0
+
+            # if (count % eval_every == 0 and count > (eval_every * 20) or count % (eval_every * 4) == 0 and count <
+            #         (eval_every * 20)):
+        model.train(False)
+        best_train_F, new_train_F, _ = evaluating(model, test_train_data, best_train_F)
+        best_dev_F, new_dev_F, save = evaluating(model, dev_data, best_dev_F)
+        if save:
+            torch.save(model, model_name)
+        best_test_F, new_test_F, _ = evaluating(model, test_data, best_test_F)
+        sys.stdout.flush()
+
+        all_F.append([new_train_F, new_dev_F, new_test_F])
+        model.train(True)
 
 
 if __name__ == "__main__":
@@ -463,6 +382,8 @@ if __name__ == "__main__":
         pickle.dump(mappings, f)
 
     print("word_to_id: ", len(word_to_id))
+
+    assert False
 
     torch.cuda.empty_cache()
     # torch.cuda.memory_summary(device=None, abbreviated=False)
