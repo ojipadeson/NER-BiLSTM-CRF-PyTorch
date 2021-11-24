@@ -16,7 +16,7 @@ from torch.autograd import Variable
 import loader
 from utils import *
 from loader import *
-# from model import BiLSTM_CRF
+from model import BiLSTM_CRF
 
 optparser = optparse.OptionParser()
 optparser.add_option("-T", "--train", default="data/eng.train", help="Train set location")
@@ -382,8 +382,6 @@ if __name__ == "__main__":
         pickle.dump(mappings, f)
 
     print("word_to_id: ", len(word_to_id))
-
-    assert False
 
     torch.cuda.empty_cache()
     # torch.cuda.memory_summary(device=None, abbreviated=False)
