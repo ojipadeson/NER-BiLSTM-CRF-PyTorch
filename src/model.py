@@ -125,7 +125,8 @@ class BiLSTM_CRF(nn.Module):
     def _get_lstm_features(self, sentence, chars, caps, chars2_length, d):
 
         if self.char_mode == "LSTM":
-            # self.char_lstm_hidden = self.init_lstm_hidden(dim=self.char_lstm_dim, bidirection=True, batchsize=chars.size(0))
+            # self.char_lstm_hidden = self.init_lstm_hidden
+            # (dim=self.char_lstm_dim, bidirection=True, batchsize=chars.size(0))
             chars_embeds = self.char_embeds(chars).transpose(0, 1)
             packed = torch.nn.utils.rnn.pack_padded_sequence(chars_embeds, chars2_length)
             lstm_out, _ = self.char_lstm(packed)

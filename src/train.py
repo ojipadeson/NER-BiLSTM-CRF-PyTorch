@@ -1,17 +1,13 @@
 # coding=utf-8
 import optparse
 import itertools
-# import matplotlib.pyplot as plt
 import sys
-# import visdom
 import torch
 import pickle
 
-# import gc
 from collections import OrderedDict
 from tqdm import tqdm
 from torch.autograd import Variable
-# from sklearn.metrics import classification_report, f1_score, confusion_matrix
 
 import loader
 from utils import *
@@ -23,10 +19,6 @@ optparser.add_option("-T", "--train", default="data/eng.train", help="Train set 
 optparser.add_option("-d", "--dev", default="data/eng.testa", help="Dev set location")
 optparser.add_option("-t", "--test", default="data/eng.testb", help="Test set location")
 optparser.add_option("--test_train", default="data/eng.train50000", help="test train")
-# optparser.add_option("-T", "--train", default="NER/train.txt", help="Train set location")
-# optparser.add_option("-d", "--dev", default="NER/dev.txt", help="Dev set location")
-# optparser.add_option("-t", "--test", default="NER/test.txt", help="Test set location")
-# optparser.add_option("--test_train", default="NER/train.txt", help="test train")
 optparser.add_option("--score", default="evaluation/temp/score.txt", help="score file location")
 optparser.add_option("-s", "--tag_scheme", default="iobes", help="Tagging scheme (IOB or IOBES)")
 optparser.add_option(
@@ -52,7 +44,7 @@ optparser.add_option(
     type="int",
     help="Use a bidirectional LSTM for chars",
 )
-optparser.add_option("-w", "--word_dim", default="100", type="int", help="Token embedding dimension")
+optparser.add_option("-w", "--word_dim", default="300", type="int", help="Token embedding dimension")
 optparser.add_option(
     "-W",
     "--word_lstm_dim",
@@ -126,7 +118,7 @@ model_name = models_path + name  # get_name(parameters)
 tmp_model = model_name + ".tmp"
 
 
-def evaluating(model, datas, best_F):
+def evaluating(model_to_evaluate, datas, best_F):
     # FB1 on pharse level
     prediction = []
     save = False
@@ -143,7 +135,7 @@ def evaluating(model, datas, best_F):
             d = {}
             for i, ci in enumerate(chars2):
                 for j, cj in enumerate(chars2_sorted):
-                    if ci == cj and not j in d and not i in d.values():
+                    if ci == cj and j not in d and i not in d.values():
                         d[j] = i
                         continue
             chars2_length = [len(c) for c in chars2_sorted]
@@ -153,6 +145,7 @@ def evaluating(model, datas, best_F):
                 chars2_mask[i, :chars2_length[i]] = c
             chars2_mask = Variable(torch.LongTensor(chars2_mask))
 
+        d = None
         if parameters['char_mode'] == 'CNN':
             d = {}
             chars2_length = [len(c) for c in chars2]
@@ -166,9 +159,9 @@ def evaluating(model, datas, best_F):
         dwords = Variable(torch.LongTensor(data['words']))
         dcaps = Variable(torch.LongTensor(caps))
         if use_gpu:
-            val, out = model(dwords.cuda(), chars2_mask.cuda(), dcaps.cuda(), chars2_length, d)
+            val, out = model_to_evaluate(dwords.cuda(), chars2_mask.cuda(), dcaps.cuda(), chars2_length, d)
         else:
-            val, out = model(dwords, chars2_mask, dcaps, chars2_length, d)
+            val, out = model_to_evaluate(dwords, chars2_mask, dcaps, chars2_length, d)
         predicted_id = out
         for (word, true_id, pred_id) in zip(words, ground_truth_id, predicted_id):
             line = ' '.join([word, id_to_tag[true_id], id_to_tag[pred_id]])
@@ -183,7 +176,7 @@ def evaluating(model, datas, best_F):
 
     os.system('%s < %s > %s' % (eval_script, predf, scoref))
 
-    eval_lines = [l.rstrip() for l in open(scoref, 'r', encoding='utf8')]
+    eval_lines = [line.rstrip() for line in open(scoref, 'r', encoding='utf8')]
 
     for i, line in enumerate(eval_lines):
         print(line)
@@ -211,22 +204,18 @@ def evaluating(model, datas, best_F):
 def train():
     learning_rate = 0.015
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
-    # losses = []
     loss = 0.0
     best_dev_F = -1.0
     best_test_F = -1.0
     best_train_F = -1.0
     all_F = [[0, 0, 0]]
-    # plot_every = 100
-    # eval_every = 200
     count = 0
-    # vis = visdom.Visdom(use_incoming_socket=False)
     sys.stdout.flush()
 
     model.train(True)
 
     for epoch in range(1, 10001):
-        for iter, index in enumerate(tqdm(np.random.permutation(len(train_data)))):
+        for iter_num, index in enumerate(tqdm(np.random.permutation(len(train_data)))):
             data = train_data[index]
             model.zero_grad()
             count += 1
@@ -241,7 +230,7 @@ def train():
                 d = {}
                 for i, ci in enumerate(chars):
                     for j, cj in enumerate(chars_sorted):
-                        if ci == cj and not j in d and not i in d.values():
+                        if ci == cj and j not in d and i not in d.values():
                             d[j] = i
                             continue
                 chars_length = [len(c) for c in chars_sorted]
@@ -252,6 +241,7 @@ def train():
                 chars_mask = Variable(torch.LongTensor(chars_mask))
 
             # char cnn
+            d = None
             if parameters["char_mode"] == "CNN":
                 d = {}
                 chars_length = [len(c) for c in chars]
@@ -282,16 +272,6 @@ def train():
             if count % len(train_data) == 0:
                 adjust_learning_rate(optimizer, lr=learning_rate / (1 + 0.05 * count / len(train_data)))
 
-            # if count % plot_every == 0:
-            #     loss /= plot_every
-            #     print(loss)
-            #     if not losses:
-            #         losses.append(loss)
-            #     losses.append(loss)
-            #     loss = 0.0
-
-            # if (count % eval_every == 0 and count > (eval_every * 20) or count % (eval_every * 4) == 0 and count <
-            #         (eval_every * 20)):
         model.train(False)
         best_train_F, new_train_F, _ = evaluating(model, test_train_data, best_train_F)
         best_dev_F, new_dev_F, save = evaluating(model, dev_data, best_dev_F)
@@ -356,10 +336,10 @@ if __name__ == "__main__":
     print("%i / %i / %i sentences in train / dev / test." % (len(train_data), len(dev_data), len(test_data)))
 
     all_word_embeds = {}
-    for i, line in enumerate(open(opts.pre_emb, "r", encoding="utf-8")):
-        s = line.strip().split()
+    for i_num, emb_line in enumerate(open(opts.pre_emb, "r", encoding="utf-8")):
+        s = emb_line.strip().split()
         if len(s) == parameters["word_dim"] + 1:
-            all_word_embeds[s[0]] = np.array([float(i) for i in s[1:]])
+            all_word_embeds[s[0]] = np.array([float(i_num) for i_num in s[1:]])
 
     word_embeds = np.random.uniform(-np.sqrt(0.06), np.sqrt(0.06), (len(word_to_id), opts.word_dim))
 
@@ -371,7 +351,7 @@ if __name__ == "__main__":
 
     print("Loaded %i pretrained embeddings." % len(all_word_embeds))
 
-    with open(mapping_file, "wb") as f:
+    with open(mapping_file, "wb") as file:
         mappings = {
             "word_to_id": word_to_id,
             "tag_to_id": tag_to_id,
@@ -379,7 +359,7 @@ if __name__ == "__main__":
             "parameters": parameters,
             "word_embeds": word_embeds,
         }
-        pickle.dump(mappings, f)
+        pickle.dump(mappings, file)
 
     print("word_to_id: ", len(word_to_id))
 
